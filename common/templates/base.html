@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sparta Quest Ch03</title>
+
+        <!--Resource -->
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        
+        {% block resource %}
+        {% endblock resource %}
+    </head>
+    <body>
+        <!-- Navbar -->
+        {% if request.user.is_authenticated %}
+            {% include 'navbar.html' %}
+        {% endif %}
+
+        <!-- Content -->
+        {% block content %}
+        {% endblock content %}
+        
+        <!-- Footer -->
+        {% include 'footer.html' %}
+    </body>
+</html>

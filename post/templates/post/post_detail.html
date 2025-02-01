@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+
+{% load static %}
+
+{% block resource %}
+    <link rel="stylesheet" href="{% static 'post/css/styles.css' %}">
+    <script>
+        $(document).ready(function(){
+            /*
+             * [좋아요]
+             * - 좋아요 여부에 따른 icon 설정
+             * - 좋아요 카운트 설정
+             */
+            $('#like-btn').on('click', function(e){
+                e.preventDefault();
+                
+                const button = $(this);
+                const url = button.data('url');
+                const icon = button.find('i')
+                
+                $.ajax({
+                    url: url,
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                    success: function (data) {
+                        if (data.liked) {
+                            icon.removeClass('bi-heart').addClass('bi-heart-fill');
+                        } else {
+                            icon.removeClass('bi-heart-fill').addClass('bi-heart');
+                        }
+
+                        $('#like-count').text(data.likes_count);
+                    },
+                    error: function (e) {
+                        alert('An error occurred. Please try again.');
+                    }
+                });
+            })
+
+            // 댓글 작성
+            $('#comment-post-form').on('submit', function(e){
+                e.preventDefault();
+
+                const form = e.target;
+                const url = form.action;
+                const formData = Object.fromEntries(new FormData(form));
+
+                $.ajax({
+                    url: url,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(formData),
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                    success: function (data) {
+                        addComment(data)
+                        $('#comment-post-form')[0].reset();
+                    },
+                    error: function (e) {
+                        alert('An error occurred. Please try again.');
+                    }
+                });
+            })
+
+            // 댓글 수정/취소 버튼 클릭
+            $('#comments-container').on('click', '.comment-update-btn, .comment-cancel-btn', function(e) {
+                const isEdit = $(this).hasClass('comment-update-btn');
+                toggleEditForm($(this).data('id'), isEdit)
+            })
+            
+            // 댓글 수정 폼 관리
+            function toggleEditForm(comment_id, isEdit) {              
+                let detail_btns = $('#detail-btns-' + comment_id)
+                let comment_date =  $('#comment-date-' + comment_id)
+                let comment_content =  $('#comment-content-' + comment_id)
+                let comment_update_form = $('#comment-update-form-' + comment_id)
+                let textarea = comment_update_form.find('textarea');
+
+                textarea.val(comment_content.text())
+
+                if (isEdit) {
+                    detail_btns.hide()
+                    comment_date.hide();
+                    comment_content.hide();
+                    comment_update_form.show();
+                } else {
+                    detail_btns.show()               
+                    comment_date.show();
+                    comment_content.show();
+                    comment_update_form.hide();
+                }
+            }
+            
+            // 댓글 수정
+            $('#comments-container').on('submit', '.comment-update-form', function(e) {
+                e.preventDefault();
+
+                const form = e.target;
+                const url = form.action;
+                const formData = Object.fromEntries(new FormData(form));
+
+                $.ajax({
+                    url: url,
+                    method: 'PUT',
+                    contentType: 'application/json',
+                    data: JSON.stringify(formData),
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                    success: function (data) {
+                        $('#comment-content-' + data.id).text(data.content)
+                        $('#comment-date-' + data.id).text(data.formatted_date.updated_at)
+                        toggleEditForm(data.id, false)
+                    },
+                    error: function (e) {
+                        alert('An error occurred. Please try again.');
+                    }
+                });
+            })
+
+            // 댓글 삭제
+            $('#comments-container').on('click', '.comment-delete-btn', function(e) {
+                e.preventDefault();
+                
+                if (confirm("댓글을 삭제하시겠습니까?")) {
+                    const button = $(this);
+                    const url = button.data('url');
+
+                    $.ajax({
+                        url: url,
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                        success: function (data) {
+                            $('#comment-' + data.comment_pk).remove()
+                        },
+                        error: function (e) {
+                            alert('An error occurred. Please try again.');
+                        }
+                    });
+                }
+            })
+
+            // 작성 댓글 화면 추가
+            function addComment(comment) {
+                var newCommentHtml = 
+                `
+                    <div id="comment-${comment.id}">
+                        <div class="d-flex align-items-start">
+                            <div class="flex-shrink-0">
+                                <img class="rounded-circle comment-fixed-size" src="${comment.user_details.profile_img}" alt="..." />
+                            </div>
+                            <div class="ms-3" style="width: 100%;">
+                                <div class="fw-bold">${comment.user_details.nickname} ${comment.id}</div>
+                                <p id="comment-content-${comment.id}">${comment.content}</p>
+                                <span id="comment-date-${comment.id}">${comment.formatted_date.updated_at}</span>
+                                <form style="display: none;" id="comment-update-form-${comment.id}" action="/api/v1/post/comments/${comment.id}/" class="comment-update-form">
+                                    <textarea name="content" class="form-control me-2 mt-2" rows="3"></textarea>
+                                    <div class="d-flex flex-column mt-2">
+                                        <div class="ms-auto">
+                                            <button data-id="${comment.id}" class="btn btn-outline-secondary btn-sm comment-cancel-btn" type="button">Cancel</button>
+                                            <button type="submit" class="btn btn-outline-primary btn-sm me-1">Save</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-2">
+                            <div id="detail-btns-${comment.id}">
+                                <button data-id="${comment.id}" class="btn btn-outline-primary btn-sm comment-update-btn">Update</button>
+                                <button data-url="/api/v1/post/comments/${comment.id}/" class="btn btn-outline-danger btn-sm comment-delete-btn">Delete</button>
+                            </div>
+                        </div>
+                        <hr>
+                    </div>
+                `
+                $('#comment-section').append(newCommentHtml);
+            }
+        })
+    </script>
+{% endblock resource %}
+
+{% block content %}
+    <!-- Page content-->
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <!-- Post content-->
+                <article>
+                    <!-- Post header-->
+                    <header class="mb-4">
+                        <!-- Post title-->
+                        <h1 class="fw-bolder mb-1">{{ post.title }}</h1>
+                        
+                        <!-- Post meta content-->
+                        <div class="text-muted fst-italic mb-2">Last Update, {{ post.updated_at }}</div>
+                        
+                        <!-- 
+                            Post categories
+                            <a class="badge bg-secondary text-decoration-none link-light" href="#!">Web Design</a>
+                            <a class="badge bg-secondary text-decoration-none link-light" href="#!">Freebies</a>
+                        -->
+                    </header>
+                    <!-- Post image -->
+                    <figure class="mb-4" style="text-align: center">
+                        <img src="{{ post.get_image_url }}" class="fixed-size" alt="Post Image">
+                    </figure>
+                    <!-- Post content-->
+                    <section class="mb-5">
+                        <p class="fs-5 mb-4">{{ post.content }}</p>                        
+                    </section>
+                </article>
+                <div class="mb-4 d-flex justify-content-between align-items-center">
+                    <div class="d-flex">
+                        <!-- List Button -->
+                        <button type="button" class="btn btn-primary me-1" onclick="location.href='{% url 'post:post_list' %}'">List</button>
+                        
+                        <!-- 작성자인 경우에만 출력 -->
+                        {% if post.author == request.user %}
+                            <!-- Update Button -->
+                            <button type="button" class="btn btn-primary me-1" onclick="location.href='{% url 'post:post_update' post.pk %}'">Update</button>
+
+                            <!-- Delete Form -->
+                            <form action="{% url 'post:post_delete' post.pk %}" method="POST">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger me-1">Delete</button>
+                            </form>
+                        {% endif %}
+                    </div>
+
+                    <!-- Likes -->
+                    <div id="like-container" class="d-flex align-items-center">
+                        <button id="like-btn" data-url="{% url 'api_post:api_post_like' post.pk %}" class="btn btn-outline-danger d-flex align-items-center me-2">
+                            {% if liked %}
+                                <i class="bi bi-heart-fill me-2"></i> Like
+                            {% else %}
+                                <i class="bi bi-heart me-2"></i> Like
+                            {% endif %}
+                        </button>
+                        <span id="like-count">{{ post.get_likes_count }}</span>
+                    </div>
+                </div>
+
+                <!-- Comments section-->
+                <div id="comments-container">
+                    <section class="mb-5">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <!-- Comment List -->
+                                <div id="comment-section">
+                                    {% for comment in post.get_comments %}
+                                        {% include "post/comments.html" %}
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Comment Form -->
+                                <form id="comment-post-form" action="{% url 'api_post:api_comment_list' post.pk %}" class="mb-1 d-flex">
+                                    <textarea name="content" class="form-control me-2" rows="3" placeholder="Join the discussion and leave a comment!"></textarea>
+                                    <button type="submit" class="btn btn-outline-secondary">Post</button>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock content %}
